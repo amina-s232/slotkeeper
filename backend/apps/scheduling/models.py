@@ -1,11 +1,9 @@
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
-from django.contrib.postgres.constraints import ExclusionConstraint
-from django.contrib.postgres.fields import DateTimeRangeField, RangeBoundary, RangeOperators
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, Func, Q
+from django.db.models import  Q
 
 
 def validate_timezone(value: str) -> None:
