@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 
 def validate_timezone(value: str) -> None:
@@ -39,3 +39,33 @@ class Provider(models.Model):
 
     def __str__(self):
         return self.display_name
+
+class Weekday(models.IntegerChoices):
+    MONDAY = 0, "Monday"
+    TUESDAY = 1, "Tuesday"
+    WEDNESDAY = 2, "Wednesday"
+    THURSDAY = 3, "Thursday"
+    FRIDAY = 4, "Friday"
+    SATURDAY = 5, "Saturday"
+    SUNDAY = 6, "Sunday"
+
+class AvailabilityRule(models.Model):
+    """Weekly recurring working hours, interpreted in the provider's timezone."""
+
+    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name="rules")
+    weekday = models.PositiveSmallIntegerField(choices=Weekday.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    valid_from = models.DateField(null=True, blank=True)
+    valid_to = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["provider", "weekday", "start_time"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_time__gt=F("start_time")), name="rule_end_after_start"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.provider} {self.get_weekday_display()} {self.start_time}-{self.end_time}"
