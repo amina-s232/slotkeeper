@@ -69,3 +69,21 @@ class AvailabilityRule(models.Model):
 
     def __str__(self):
         return f"{self.provider} {self.get_weekday_display()} {self.start_time}-{self.end_time}"
+
+class TimeOff(models.Model):
+    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name="time_off")
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    reason = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["starts_at"]
+        verbose_name_plural = "time off"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_at__gt=F("starts_at")), name="timeoff_ends_after_start"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.provider} off {self.starts_at:%Y-%m-%d %H:%M}"
