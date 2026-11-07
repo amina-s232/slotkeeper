@@ -1,9 +1,15 @@
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import (
+    DateTimeRangeField,
+    RangeBoundary,
+    RangeOperators,
+)
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import F, Func, Q
 
 
 def validate_timezone(value: str) -> None:
@@ -87,3 +93,61 @@ class TimeOff(models.Model):
 
     def __str__(self):
         return f"{self.provider} off {self.starts_at:%Y-%m-%d %H:%M}"
+
+
+class TsTzRange(Func):
+    """SQL TSTZRANGE(start, end, bounds) so the database can compare time ranges."""
+
+    function = "TSTZRANGE"
+    output_field = DateTimeRangeField()
+
+
+class AppointmentStatus(models.TextChoices):
+    BOOKED = "booked", "Booked"
+    CANCELLED = "cancelled", "Cancelled"
+    COMPLETED = "completed", "Completed"
+    NO_SHOW = "no_show", "No show"
+
+class Appointment(models.Model):
+    provider = models.ForeignKey(Provider, on_delete=models.PROTECT, related_name="appointments")
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="appointments"
+    )
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=10, choices=AppointmentStatus.choices, default=AppointmentStatus.BOOKED
+    )
+    notes = models.TextField(blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["starts_at"]
+        indexes = [models.Index(fields=["provider", "starts_at"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_at__gt=F("starts_at")), name="appointment_ends_after_start"
+            ),
+            # The guarantee: no two *booked* appointments for one provider may overlap.
+            ExclusionConstraint(
+                name="no_overlapping_booked_appointments",
+                expressions=[
+                    (TsTzRange("starts_at", "ends_at", RangeBoundary()), RangeOperators.OVERLAPS),
+                    ("provider", RangeOperators.EQUAL),
+                ],
+                condition=Q(status="booked"),
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.provider} @ {self.starts_at:%Y-%m-%d %H:%M}"
