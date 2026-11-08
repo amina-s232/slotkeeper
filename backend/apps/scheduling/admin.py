@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import Appointment, AvailabilityRule, Provider, TimeOff
 
+
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
     list_display = ["display_name", "specialty", "timezone", "is_active"]
