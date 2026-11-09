@@ -19,7 +19,7 @@ class IsAdminRole(HasRole):
 class IsProviderRole(HasRole):
     allowed_roles = (Role.PROVIDER,)
 
-class IsClientROle(HasRole):
+class IsClientRole(HasRole):
     allowed_roles = (Role.CLIENT,)
 
 class IsProviderOrAdmin(HasRole):

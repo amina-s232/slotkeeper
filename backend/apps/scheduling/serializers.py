@@ -1,6 +1,7 @@
+from django.utils import timezone
 from rest_framework import serializers
 
-from .models import AvailabilityRule, Provider, TimeOff
+from .models import Appointment, AvailabilityRule, Provider, TimeOff
 
 
 class ProviderSerializer(serializers.ModelSerializer):
@@ -75,3 +76,44 @@ class TimeOffSerializer(serializers.ModelSerializer):
         if attrs["ends_at"] <= attrs["starts_at"]:
             raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
         return attrs
+
+class AppointmentSerializer(serializers.ModelSerializer):
+    provider_name = serializers.CharField(source="provider.display_name", read_only=True)
+    client_name = serializers.CharField(source="client.full_name", read_only=True)
+
+    class Meta:
+        model = Appointment
+        fields = [
+            "id",
+            "provider",
+            "provider_name",
+            "client",
+            "client_name",
+            "starts_at",
+            "ends_at",
+            "status",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class AwareDateTimeField(serializers.DateTimeField):
+    """DateTimeField that refuses input without a UTC offset.
+
+    By default DRF silently reads a naive "2030-01-07T09:00:00" as UTC. For a booking API that
+    would put an Indian client's 09:00 at 14:30 local time, with no error to warn anyone.
+    """
+
+    def enforce_timezone(self, value):
+        if timezone.is_naive(value):
+            raise serializers.ValidationError(
+                "Include a timezone offset, e.g. 2030-01-07T09:00:00+05:30 or ...Z."
+            )
+        return super().enforce_timezone(value)
+
+
+class AppointmentCreateSerializer(serializers.Serializer):
+    provider = serializers.PrimaryKeyRelatedField(queryset=Provider.objects.filter(is_active=True))
+    starts_at = AwareDateTimeField(help_text="ISO 8601 with a timezone offset.")
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
