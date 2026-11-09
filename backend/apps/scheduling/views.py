@@ -40,6 +40,7 @@ class ProviderViewSet(viewsets.ReadOnlyModelViewSet):
         data = [{"starts_at": s.start, "ends_at": s.end} for s in slots]
         return Response(SlotSerializer(data, many=True).data)
 
+
 class OwnProviderMixin:
     """Everything here belongs to the logged-in provider's own profile, never anyone else's."""
 
@@ -60,7 +61,7 @@ class OwnProviderMixin:
 
 class AvailabilityRuleViewSet(OwnProviderMixin, viewsets.ModelViewSet):
     serializer_class = AvailabilityRuleSerializer
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"] 
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -87,6 +88,7 @@ class TimeOffViewSet(
 
     def perform_create(self, serializer):
         serializer.save(provider=self.get_provider())
+
 
 class Conflict(APIException):
     status_code = status.HTTP_409_CONFLICT

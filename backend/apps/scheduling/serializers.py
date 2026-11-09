@@ -29,6 +29,7 @@ class SlotSerializer(serializers.Serializer):
     starts_at = serializers.DateTimeField()
     ends_at = serializers.DateTimeField()
 
+
 def _ranges_intersect(a_from, a_to, b_from, b_to) -> bool:
     """Do two optional date ranges overlap? None means unbounded on that side."""
     return (a_from is None or b_to is None or a_from <= b_to) and (
@@ -76,6 +77,7 @@ class TimeOffSerializer(serializers.ModelSerializer):
         if attrs["ends_at"] <= attrs["starts_at"]:
             raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
         return attrs
+
 
 class AppointmentSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source="provider.display_name", read_only=True)

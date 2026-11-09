@@ -69,4 +69,3 @@ def book_appointment(
         if constraint == CLIENT_OVERLAP_CONSTRAINT:
             raise ClientConflict("You already have an appointment at that time.") from exc
         raise
-

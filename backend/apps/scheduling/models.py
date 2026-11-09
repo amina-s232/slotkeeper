@@ -46,6 +46,7 @@ class Provider(models.Model):
     def __str__(self):
         return self.display_name
 
+
 class Weekday(models.IntegerChoices):
     MONDAY = 0, "Monday"
     TUESDAY = 1, "Tuesday"
@@ -54,6 +55,7 @@ class Weekday(models.IntegerChoices):
     FRIDAY = 4, "Friday"
     SATURDAY = 5, "Saturday"
     SUNDAY = 6, "Sunday"
+
 
 class AvailabilityRule(models.Model):
     """Weekly recurring working hours, interpreted in the provider's timezone."""
@@ -75,6 +77,7 @@ class AvailabilityRule(models.Model):
 
     def __str__(self):
         return f"{self.provider} {self.get_weekday_display()} {self.start_time}-{self.end_time}"
+
 
 class TimeOff(models.Model):
     provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name="time_off")
@@ -107,6 +110,7 @@ class AppointmentStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
     COMPLETED = "completed", "Completed"
     NO_SHOW = "no_show", "No show"
+
 
 class Appointment(models.Model):
     provider = models.ForeignKey(Provider, on_delete=models.PROTECT, related_name="appointments")
@@ -147,7 +151,7 @@ class Appointment(models.Model):
                 ],
                 condition=Q(status="booked"),
             ),
-                ExclusionConstraint(
+            ExclusionConstraint(
                 name="client_cannot_double_book",
                 expressions=[
                     (TsTzRange("starts_at", "ends_at", RangeBoundary()), RangeOperators.OVERLAPS),
@@ -155,7 +159,6 @@ class Appointment(models.Model):
                 ],
                 condition=Q(status="booked"),
             ),
-
         ]
 
     def __str__(self):

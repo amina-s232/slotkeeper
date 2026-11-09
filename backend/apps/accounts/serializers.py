@@ -7,11 +7,13 @@ from .models import Role, User
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields =["id","email","full_name","phone","role"]
-        read_only_fields = ["id","email","role"]
+        fields = ["id", "email", "full_name", "phone", "role"]
+        read_only_fields = ["id", "email", "role"]
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
+
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "phone", "password"]
@@ -22,7 +24,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
-    
+
     def validate(self, attrs):
         # Validate against a transient user so UserAttributeSimilarityValidator can work.
         candidate = User(email=attrs["email"], full_name=attrs["full_name"])
