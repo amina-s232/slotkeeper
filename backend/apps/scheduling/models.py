@@ -147,6 +147,15 @@ class Appointment(models.Model):
                 ],
                 condition=Q(status="booked"),
             ),
+                ExclusionConstraint(
+                name="client_cannot_double_book",
+                expressions=[
+                    (TsTzRange("starts_at", "ends_at", RangeBoundary()), RangeOperators.OVERLAPS),
+                    ("client", RangeOperators.EQUAL),
+                ],
+                condition=Q(status="booked"),
+            ),
+
         ]
 
     def __str__(self):
