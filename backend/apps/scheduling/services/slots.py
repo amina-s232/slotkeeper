@@ -1,3 +1,15 @@
+"""Free-slot generation.
+
+Two layers, on purpose:
+
+* candidate_slots: slots the provider *offers* (rules minus time off, respecting notice and the
+  booking window). It never looks at appointments, so the booking service can validate a
+  requested time against it without racing other bookings.
+* free_slots: candidate_slots minus already-booked appointments. This is what the UI shows.
+
+Whether a slot is truly taken is decided by the database constraint, never by this module.
+"""
+
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
