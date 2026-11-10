@@ -6,7 +6,7 @@ from .models import Role
 class HasRole(BasePermission):
     """Base class : subclasses set `allowed_roles`"""
 
-    allowed_roles: tuple[str,...] = ()
+    allowed_roles: tuple[str, ...] = ()
 
     def has_permission(self, request, view):
         user = request.user
@@ -16,11 +16,14 @@ class HasRole(BasePermission):
 class IsAdminRole(HasRole):
     allowed_roles = (Role.ADMIN,)
 
+
 class IsProviderRole(HasRole):
     allowed_roles = (Role.PROVIDER,)
 
+
 class IsClientRole(HasRole):
     allowed_roles = (Role.CLIENT,)
+
 
 class IsProviderOrAdmin(HasRole):
     allowed_roles = (Role.PROVIDER, Role.ADMIN)

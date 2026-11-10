@@ -1,7 +1,9 @@
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import psycopg.errors
 import pytest
+from django.db import OperationalError
 
 from apps.scheduling.models import (
     Appointment,
@@ -10,6 +12,7 @@ from apps.scheduling.models import (
     TimeOff,
 )
 from apps.scheduling.services.booking import (
+    MAX_ATTEMPTS,
     ClientConflict,
     InvalidSlot,
     SlotUnavailable,
@@ -146,3 +149,55 @@ def test_cancelled_slot_can_be_booked_again(provider, client_a, client_b):
     first.save()
     second = book_appointment(client=client_b, provider=provider, starts_at=NINE_IST, now=NOW)
     assert second.pk != first.pk
+
+
+# ---- deadlock handling -----------------------------------------------------------------
+# A real deadlock can't be forced on demand, so these simulate one at the database call.
+
+
+def _deadlock():
+    error = OperationalError("deadlock detected")
+    error.__cause__ = psycopg.errors.DeadlockDetected("deadlock detected")
+    return error
+
+
+def test_a_deadlock_is_retried_and_the_booking_then_succeeds(provider, client_a, monkeypatch):
+    real_create = Appointment.objects.create
+    calls = []
+
+    def flaky_create(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise _deadlock()
+        return real_create(**kwargs)
+
+    monkeypatch.setattr(Appointment.objects, "create", flaky_create)
+    appointment = book_appointment(client=client_a, provider=provider, starts_at=NINE_IST, now=NOW)
+    assert appointment.pk
+    assert len(calls) == 2
+
+
+def test_a_persistent_deadlock_is_raised_not_hidden(provider, client_a, monkeypatch):
+    calls = []
+
+    def always_deadlocks(**kwargs):
+        calls.append(kwargs)
+        raise _deadlock()
+
+    monkeypatch.setattr(Appointment.objects, "create", always_deadlocks)
+    with pytest.raises(OperationalError):
+        book_appointment(client=client_a, provider=provider, starts_at=NINE_IST, now=NOW)
+    assert len(calls) == MAX_ATTEMPTS
+
+
+def test_other_database_errors_are_not_retried(provider, client_a, monkeypatch):
+    calls = []
+
+    def connection_lost(**kwargs):
+        calls.append(kwargs)
+        raise OperationalError("connection lost")
+
+    monkeypatch.setattr(Appointment.objects, "create", connection_lost)
+    with pytest.raises(OperationalError):
+        book_appointment(client=client_a, provider=provider, starts_at=NINE_IST, now=NOW)
+    assert len(calls) == 1

@@ -2,8 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import APIException, NotFound
-from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -40,6 +39,16 @@ class ProviderViewSet(viewsets.ReadOnlyModelViewSet):
         data = [{"starts_at": s.start, "ends_at": s.end} for s in slots]
         return Response(SlotSerializer(data, many=True).data)
 
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Conflict."
+    default_code = "conflict"
+
+
+# ---- a provider managing their own schedule --------------------------------------------
+
+
 class OwnProviderMixin:
     """Everything here belongs to the logged-in provider's own profile, never anyone else's."""
 
@@ -60,7 +69,7 @@ class OwnProviderMixin:
 
 class AvailabilityRuleViewSet(OwnProviderMixin, viewsets.ModelViewSet):
     serializer_class = AvailabilityRuleSerializer
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"] 
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -87,11 +96,6 @@ class TimeOffViewSet(
 
     def perform_create(self, serializer):
         serializer.save(provider=self.get_provider())
-
-class Conflict(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = "Conflict."
-    default_code = "conflict"
 
 
 class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -140,7 +144,7 @@ class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 notes=data["notes"],
             )
         except InvalidSlot as exc:
-            raise DRFValidationError({"starts_at": [str(exc)]}) from exc
+            raise ValidationError({"starts_at": [str(exc)]}) from exc
         except SlotUnavailable as exc:
             raise Conflict(str(exc), code="slot_unavailable") from exc
         except ClientConflict as exc:

@@ -1,5 +1,9 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
-from rest_framework import serializers
+from rest_framework import mixins, serializers, viewsets
+from rest_framework.exceptions import NotFound
+
+from apps.accounts.permissions import IsProviderRole
 
 from .models import Appointment, AvailabilityRule, Provider, TimeOff
 
@@ -28,6 +32,7 @@ class SlotQuerySerializer(serializers.Serializer):
 class SlotSerializer(serializers.Serializer):
     starts_at = serializers.DateTimeField()
     ends_at = serializers.DateTimeField()
+
 
 def _ranges_intersect(a_from, a_to, b_from, b_to) -> bool:
     """Do two optional date ranges overlap? None means unbounded on that side."""
@@ -76,6 +81,56 @@ class TimeOffSerializer(serializers.ModelSerializer):
         if attrs["ends_at"] <= attrs["starts_at"]:
             raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
         return attrs
+
+
+class OwnProviderMixin:
+    """Everything here belongs to the logged-in provider's own profile, never anyone else's."""
+
+    permission_classes = [IsProviderRole]
+
+    def get_provider(self) -> Provider:
+        try:
+            return self.request.user.provider_profile
+        except ObjectDoesNotExist:
+            raise NotFound("No provider profile is linked to this account.") from None
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if not getattr(self, "swagger_fake_view", False):
+            context["provider"] = self.get_provider()
+        return context
+
+
+class AvailabilityRuleViewSet(OwnProviderMixin, viewsets.ModelViewSet):
+    serializer_class = AvailabilityRuleSerializer
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return AvailabilityRule.objects.none()
+        return self.get_provider().rules.all()
+
+    def perform_create(self, serializer):
+        serializer.save(provider=self.get_provider())
+
+
+class TimeOffViewSet(
+    OwnProviderMixin,
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = TimeOffSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TimeOff.objects.none()
+        return self.get_provider().time_off.all()
+
+    def perform_create(self, serializer):
+        serializer.save(provider=self.get_provider())
+
 
 class AppointmentSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source="provider.display_name", read_only=True)

@@ -1,4 +1,5 @@
 """Settings shared by every environment. Environment-specific values come from env vars."""
+
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -144,5 +145,3 @@ CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "SlotKeeper <noreply@slotkeeper.local>")
-
-
