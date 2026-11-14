@@ -33,6 +33,7 @@ from apps.scheduling.services.booking import (
 )
 from apps.scheduling.services.slots import candidate_slots
 
+
 class InvalidTransition(BookingError):
     """The appointment is not in a state that allows this (maps to HTTP 409)."""
 
