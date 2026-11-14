@@ -1,16 +1,25 @@
 from datetime import UTC, datetime, time, timedelta
 
+import psycopg.errors
 import pytest
+from django.db import OperationalError
 
 from apps.accounts.models import Role
 from apps.scheduling.models import Appointment, AppointmentStatus, AvailabilityRule
-from apps.scheduling.services.booking import book_appointment
+from apps.scheduling.services.booking import (
+    MAX_ATTEMPTS,
+    ClientConflict,
+    InvalidSlot,
+    SlotUnavailable,
+    book_appointment,
+)
 from apps.scheduling.services.lifecycle import (
     DeadlinePassed,
     InvalidTransition,
     cancel_appointment,
     complete_appointment,
     mark_no_show,
+    reschedule_appointment,
 )
 
 pytestmark = pytest.mark.django_db
@@ -146,3 +155,133 @@ def test_completed_is_final(booked):
     with pytest.raises(InvalidTransition):
         mark_no_show(appointment_id=booked.pk, now=AFTER_START)
     assert reload(booked).status == AppointmentStatus.COMPLETED
+
+# ---- reschedule ------------------------------------------------------------------------
+
+
+def test_reschedule_moves_the_same_appointment(booked, alice):
+    moved = reschedule_appointment(
+        appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
+    )
+    assert moved.pk == booked.pk
+    booked = reload(booked)
+    assert booked.starts_at == TEN_IST
+    assert booked.ends_at == TEN_IST + timedelta(minutes=30)
+    assert booked.status == AppointmentStatus.BOOKED
+
+
+def test_reschedule_frees_the_old_slot(provider, booked, alice, bob):
+    reschedule_appointment(appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW)
+    taken = book_appointment(client=bob, provider=provider, starts_at=NINE_IST, now=NOW)
+    assert taken.starts_at == NINE_IST
+
+
+def test_reschedule_resets_the_reminder_so_the_new_time_gets_one(booked, alice):
+    Appointment.objects.filter(pk=booked.pk).update(reminder_sent_at=NOW)
+    reschedule_appointment(appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW)
+    assert reload(booked).reminder_sent_at is None
+
+
+def test_reschedule_onto_a_taken_slot_conflicts_and_changes_nothing(provider, booked, alice, bob):
+    book_appointment(client=bob, provider=provider, starts_at=TEN_IST, now=NOW)
+    with pytest.raises(SlotUnavailable):
+        reschedule_appointment(
+            appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
+        )
+    assert reload(booked).starts_at == NINE_IST
+
+
+def test_reschedule_cannot_double_book_the_client_elsewhere(provider, make_provider, booked, alice):
+    other = make_provider()
+    AvailabilityRule.objects.create(
+        provider=other, weekday=0, start_time=time(9), end_time=time(12)
+    )
+    book_appointment(client=alice, provider=other, starts_at=TEN_IST, now=NOW)
+    with pytest.raises(ClientConflict):
+        reschedule_appointment(
+            appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
+        )
+    assert reload(booked).starts_at == NINE_IST
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        NINE_IST,  # where it already is
+        NINE_IST + timedelta(minutes=15),  # off the grid
+        NINE_IST + timedelta(days=1),  # Tuesday: no working hours
+        NINE_IST + timedelta(hours=8),  # after hours
+    ],
+)
+def test_reschedule_to_a_time_the_provider_does_not_offer_is_rejected(booked, alice, target):
+    with pytest.raises(InvalidSlot):
+        reschedule_appointment(appointment_id=booked.pk, actor=alice, new_starts_at=target, now=NOW)
+    assert reload(booked).starts_at == NINE_IST
+
+
+def test_reschedule_rejects_a_timestamp_without_an_offset(booked, alice):
+    with pytest.raises(InvalidSlot):
+        reschedule_appointment(
+            appointment_id=booked.pk,
+            actor=alice,
+            new_starts_at=datetime(2030, 1, 7, 10, 0),
+            now=NOW,
+        )
+
+
+def test_client_cannot_reschedule_inside_the_cutoff_but_provider_can(provider, booked, alice):
+    late = NINE_IST - timedelta(hours=2)
+    with pytest.raises(DeadlinePassed):
+        reschedule_appointment(
+            appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=late
+        )
+    reschedule_appointment(
+        appointment_id=booked.pk, actor=provider.user, new_starts_at=TEN_IST, now=late
+    )
+    assert reload(booked).starts_at == TEN_IST
+
+
+def test_cannot_reschedule_a_cancelled_appointment(booked, alice):
+    cancel_appointment(appointment_id=booked.pk, actor=alice, now=NOW)
+    with pytest.raises(InvalidTransition):
+        reschedule_appointment(
+            appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
+        )
+
+# ---- deadlock handling (simulated at the database call, as in test_booking) --------------
+
+
+def _deadlock():
+    error = OperationalError("deadlock detected")
+    error.__cause__ = psycopg.errors.DeadlockDetected("deadlock detected")
+    return error
+
+
+def test_reschedule_retries_after_a_deadlock(booked, alice, monkeypatch):
+    real_save = Appointment.save
+    calls = []
+    def flaky_save(self, *args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise _deadlock()
+        return real_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(Appointment, "save", flaky_save)
+    reschedule_appointment(appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW)
+    assert len(calls) == 2
+    assert reload(booked).starts_at == TEN_IST
+
+
+def test_reschedule_gives_up_after_max_attempts(booked, alice, monkeypatch):
+    calls = []
+
+    def always_deadlocks(self, *args, **kwargs):
+        calls.append(1)
+        raise _deadlock()
+
+    monkeypatch.setattr(Appointment, "save", always_deadlocks)
+    with pytest.raises(OperationalError):
+        reschedule_appointment(
+            appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
+        )
+    assert len(calls) == MAX_ATTEMPTS
