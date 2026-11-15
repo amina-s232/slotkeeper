@@ -148,6 +148,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "ends_at",
             "status",
             "notes",
+            "cancelled_at",
             "created_at",
         ]
         read_only_fields = fields
@@ -172,3 +173,6 @@ class AppointmentCreateSerializer(serializers.Serializer):
     provider = serializers.PrimaryKeyRelatedField(queryset=Provider.objects.filter(is_active=True))
     starts_at = AwareDateTimeField(help_text="ISO 8601 with a timezone offset.")
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
+
+class RescheduleSerializer(serializers.Serializer):
+    starts_at = AwareDateTimeField(help_text="New start, ISO 8601 with a timezone offset.")
