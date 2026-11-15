@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
-from apps.accounts.permissions import IsClientRole, IsProviderRole
+from apps.accounts.permissions import IsClientRole, IsProviderOrAdmin, IsProviderRole
 
 from .models import Appointment, AvailabilityRule, Provider, TimeOff
 from .serializers import (
@@ -15,11 +15,20 @@ from .serializers import (
     AppointmentSerializer,
     AvailabilityRuleSerializer,
     ProviderSerializer,
+    RescheduleSerializer,
     SlotQuerySerializer,
     SlotSerializer,
     TimeOffSerializer,
 )
 from .services.booking import ClientConflict, InvalidSlot, SlotUnavailable, book_appointment
+from .services.lifecycle import (
+    DeadlinePassed,
+    InvalidTransition,
+    cancel_appointment,
+    complete_appointment,
+    mark_no_show,
+    reschedule_appointment,
+)
 from .services.slots import free_slots
 
 
@@ -105,6 +114,8 @@ class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
     def get_permissions(self):
         if self.action == "create":
             return [IsClientRole()]
+        if self.action in ("complete", "no_show"):
+            return [IsProviderOrAdmin()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -150,3 +161,85 @@ class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         except ClientConflict as exc:
             raise Conflict(str(exc), code="client_conflict") from exc
         return Response(AppointmentSerializer(appointment).data, status=status.HTTP_201_CREATED)
+
+    # ---- lifecycle actions -------------------------------------------------------------
+    # get_object() uses the role-scoped queryset above, so someone else's appointment is a 404.
+
+    def _respond(self, call):
+        """Run a lifecycle service call and translate its domain errors into HTTP errors."""
+        try:
+            appointment = call()
+        except InvalidSlot as exc:
+            raise ValidationError({"starts_at": [str(exc)]}) from exc
+        except SlotUnavailable as exc:
+            raise Conflict(str(exc), code="slot_unavailable") from exc
+        except ClientConflict as exc:
+            raise Conflict(str(exc), code="client_conflict") from exc
+        except InvalidTransition as exc:
+            raise Conflict(str(exc), code="invalid_transition") from exc
+        except DeadlinePassed as exc:
+            raise Conflict(str(exc), code="deadline_passed") from exc
+        return Response(AppointmentSerializer(appointment).data)
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: AppointmentSerializer,
+            409: OpenApiResponse(description="Not cancellable now."),
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Cancel a booked appointment. Clients must do so before the provider's cut-off."""
+        appointment = self.get_object()
+        return self._respond(
+            lambda: cancel_appointment(appointment_id=appointment.pk, actor=request.user)
+        )
+
+    @extend_schema(
+        request=RescheduleSerializer,
+        responses={
+            200: AppointmentSerializer,
+            400: OpenApiResponse(description="Not a slot the provider offers."),
+            409: OpenApiResponse(description="Slot taken, client busy, or too late to change."),
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def reschedule(self, request, pk=None):
+        """Move the appointment to another slot of the same provider."""
+        appointment = self.get_object()
+        serializer = RescheduleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._respond(
+            lambda: reschedule_appointment(
+                appointment_id=appointment.pk,
+                actor=request.user,
+                new_starts_at=serializer.validated_data["starts_at"],
+            )
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: AppointmentSerializer,
+            409: OpenApiResponse(description="Not in a completable state."),
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        """Provider or admin: mark a started appointment as completed."""
+        appointment = self.get_object()
+        return self._respond(lambda: complete_appointment(appointment_id=appointment.pk))
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: AppointmentSerializer,
+            409: OpenApiResponse(description="Not in a state that allows this."),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="no-show")
+    def no_show(self, request, pk=None):
+        """Provider or admin: record that the client did not turn up."""
+        appointment = self.get_object()
+        return self._respond(lambda: mark_no_show(appointment_id=appointment.pk))
