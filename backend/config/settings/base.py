@@ -126,6 +126,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "300/min"},
+    "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }
 
 SIMPLE_JWT = {

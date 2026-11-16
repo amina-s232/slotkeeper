@@ -156,6 +156,7 @@ def test_completed_is_final(booked):
         mark_no_show(appointment_id=booked.pk, now=AFTER_START)
     assert reload(booked).status == AppointmentStatus.COMPLETED
 
+
 # ---- reschedule ------------------------------------------------------------------------
 
 
@@ -248,6 +249,7 @@ def test_cannot_reschedule_a_cancelled_appointment(booked, alice):
             appointment_id=booked.pk, actor=alice, new_starts_at=TEN_IST, now=NOW
         )
 
+
 # ---- deadlock handling (simulated at the database call, as in test_booking) --------------
 
 
@@ -260,6 +262,7 @@ def _deadlock():
 def test_reschedule_retries_after_a_deadlock(booked, alice, monkeypatch):
     real_save = Appointment.save
     calls = []
+
     def flaky_save(self, *args, **kwargs):
         calls.append(1)
         if len(calls) == 1:

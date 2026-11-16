@@ -31,6 +31,7 @@ from apps.scheduling.services.booking import (
     _is_deadlock,
     _violated_constraint,
 )
+from apps.scheduling.services.notifications import send_cancellation_notice
 from apps.scheduling.services.slots import candidate_slots
 
 
@@ -81,6 +82,8 @@ def cancel_appointment(*, appointment_id: int, actor, now: datetime | None = Non
         appointment.cancelled_at = now
         appointment.cancelled_by = actor
         appointment.save(update_fields=["status", "cancelled_at", "cancelled_by", "updated_at"])
+        # Only after the cancellation is really committed; a rollback sends nothing.
+        transaction.on_commit(lambda: send_cancellation_notice(appointment, actor))
     return appointment
 
 
@@ -102,6 +105,7 @@ def complete_appointment(*, appointment_id: int, now: datetime | None = None) ->
 
 def mark_no_show(*, appointment_id: int, now: datetime | None = None) -> Appointment:
     return _finish(appointment_id, AppointmentStatus.NO_SHOW, "marked as a no-show", now)
+
 
 def _run_with_retries(operation):
     """Run `operation` in a transaction, translating database errors into domain errors.
