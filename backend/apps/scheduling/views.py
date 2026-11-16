@@ -1,6 +1,6 @@
 from django.core.exceptions import ObjectDoesNotExist
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import mixins, status, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -9,11 +9,13 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import IsClientRole, IsProviderOrAdmin, IsProviderRole
 
+from .filters import AppointmentFilter
 from .models import Appointment, AvailabilityRule, Provider, TimeOff
 from .serializers import (
     AppointmentCreateSerializer,
     AppointmentSerializer,
     AvailabilityRuleSerializer,
+    OwnProviderSerializer,
     ProviderSerializer,
     RescheduleSerializer,
     SlotQuerySerializer,
@@ -30,7 +32,6 @@ from .services.lifecycle import (
     reschedule_appointment,
 )
 from .services.slots import free_slots
-from .filters import AppointmentFilter
 
 
 class ProviderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -244,3 +245,12 @@ class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         """Provider or admin: record that the client did not turn up."""
         appointment = self.get_object()
         return self._respond(lambda: mark_no_show(appointment_id=appointment.pk))
+
+class OwnProviderView(OwnProviderMixin, generics.RetrieveUpdateAPIView):
+    """The logged-in provider's own profile and booking rules."""
+
+    serializer_class = OwnProviderSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return self.get_provider()

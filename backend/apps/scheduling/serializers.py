@@ -24,6 +24,30 @@ class ProviderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+class OwnProviderSerializer(serializers.ModelSerializer):
+    """What a provider may change about their own public profile and booking rules."""
+
+    class Meta:
+        model = Provider
+        fields = [
+            "id",
+            "display_name",
+            "specialty",
+            "bio",
+            "timezone",
+            "slot_minutes",
+            "booking_window_days",
+            "min_notice_hours",
+            "cancel_cutoff_hours",
+            "is_active",
+        ]
+        read_only_fields = ["id"]
+        extra_kwargs = {
+            "slot_minutes": {"min_value": 5, "max_value": 240},
+            "booking_window_days": {"min_value": 1, "max_value": 365},
+            "min_notice_hours": {"min_value": 0, "max_value": 168},
+            "cancel_cutoff_hours": {"min_value": 0, "max_value": 168},
+        }
 
 class SlotQuerySerializer(serializers.Serializer):
     date = serializers.DateField(help_text="Day to check, in the provider's timezone (YYYY-MM-DD).")
