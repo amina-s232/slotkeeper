@@ -246,6 +246,7 @@ class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         appointment = self.get_object()
         return self._respond(lambda: mark_no_show(appointment_id=appointment.pk))
 
+
 class OwnProviderView(OwnProviderMixin, generics.RetrieveUpdateAPIView):
     """The logged-in provider's own profile and booking rules."""
 

@@ -24,6 +24,7 @@ class ProviderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+
 class OwnProviderSerializer(serializers.ModelSerializer):
     """What a provider may change about their own public profile and booking rules."""
 
@@ -48,6 +49,7 @@ class OwnProviderSerializer(serializers.ModelSerializer):
             "min_notice_hours": {"min_value": 0, "max_value": 168},
             "cancel_cutoff_hours": {"min_value": 0, "max_value": 168},
         }
+
 
 class SlotQuerySerializer(serializers.Serializer):
     date = serializers.DateField(help_text="Day to check, in the provider's timezone (YYYY-MM-DD).")
@@ -199,6 +201,7 @@ class AppointmentCreateSerializer(serializers.Serializer):
     provider = serializers.PrimaryKeyRelatedField(queryset=Provider.objects.filter(is_active=True))
     starts_at = AwareDateTimeField(help_text="ISO 8601 with a timezone offset.")
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
+
 
 class RescheduleSerializer(serializers.Serializer):
     starts_at = AwareDateTimeField(help_text="New start, ISO 8601 with a timezone offset.")
