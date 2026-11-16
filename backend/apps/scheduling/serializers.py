@@ -134,6 +134,7 @@ class TimeOffViewSet(
 
 class AppointmentSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source="provider.display_name", read_only=True)
+    provider_timezone = serializers.CharField(source="provider.timezone", read_only=True)
     client_name = serializers.CharField(source="client.full_name", read_only=True)
 
     class Meta:
@@ -142,6 +143,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "id",
             "provider",
             "provider_name",
+            "provider_timezone",
             "client",
             "client_name",
             "starts_at",

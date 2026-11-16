@@ -30,6 +30,7 @@ from .services.lifecycle import (
     reschedule_appointment,
 )
 from .services.slots import free_slots
+from .filters import AppointmentFilter
 
 
 class ProviderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -109,7 +110,7 @@ class TimeOffViewSet(
 
 class AppointmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     serializer_class = AppointmentSerializer
-    filterset_fields = ["status", "provider"]
+    filterset_class = AppointmentFilter
 
     def get_permissions(self):
         if self.action == "create":
