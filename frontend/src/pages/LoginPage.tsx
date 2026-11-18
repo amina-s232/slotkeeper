@@ -28,16 +28,33 @@ export function LoginPage() {
   }
 
   return (
-    <section className="narrow">
+    <section className="auth-card">
+      <p className="auth-brand">SlotKeeper</p>
       <h1>Sign in</h1>
+      <p className="muted">
+        Book, move and manage appointments without the phone tag.
+      </p>
+
       <form onSubmit={submit} className="form">
         <label>
           Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            required
+          />
         </label>
         <label>
           Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
         </label>
         <ErrorBanner error={error} />
         <button type="submit" disabled={busy}>

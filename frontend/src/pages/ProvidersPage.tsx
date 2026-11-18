@@ -3,6 +3,8 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../api/endpoints";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { Avatar } from "../components/Avatar";
+
 
 export function ProvidersPage() {
   const [draft, setDraft] = useState("");
@@ -37,8 +39,14 @@ export function ProvidersPage() {
       <div className="grid">
         {providers.map((p) => (
           <article key={p.id} className="card">
-            <h3>{p.display_name}</h3>
-            <p className="muted">{p.specialty || "General"}</p>
+            <div className="person">
+              <Avatar name={p.display_name} />
+              <div>
+                <h3>{p.display_name}</h3>
+                <p className="muted">{p.specialty || "General"}</p>
+              </div>
+            </div>
+
             {p.bio && <p>{p.bio}</p>}
             <p className="muted">
               {p.slot_minutes}-minute visits · {p.timezone}

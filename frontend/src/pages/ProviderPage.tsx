@@ -8,6 +8,8 @@ import { useAuth } from "../auth/AuthContext";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SlotPicker } from "../components/SlotPicker";
 import { formatDateTime } from "../lib/time";
+import { Avatar } from "../components/Avatar";
+
 
 export function ProviderPage() {
   const providerId = Number(useParams().id);
@@ -47,8 +49,13 @@ export function ProviderPage() {
       <p>
         <Link to="/providers">← All providers</Link>
       </p>
-      <h1>{p.display_name}</h1>
-      <p className="muted">{p.specialty || "General"}</p>
+      <div className="person person-large">
+        <Avatar name={p.display_name} />
+        <div>
+          <h1>{p.display_name}</h1>
+          <p className="muted">{p.specialty || "General"}</p>
+        </div>
+      </div>
       {p.bio && <p>{p.bio}</p>}
       <p className="muted">
         {p.slot_minutes}-minute visits. Book at least {p.min_notice_hours} hours ahead. Free cancellation until {p.cancel_cutoff_hours} hours
