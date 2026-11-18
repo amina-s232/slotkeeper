@@ -35,8 +35,10 @@ export function RegisterPage() {
   ] as const;
 
   return (
-    <section className="narrow">
+    <section className="auth-card">
+      <p className="auth-brand">SlotKeeper</p>
       <h1>Create an account</h1>
+      <p className="muted">It takes a minute. You can book your first appointment straight after.</p>
       <form onSubmit={submit} className="form">
         {fields.map((f) => (
           <label key={f.key}>
